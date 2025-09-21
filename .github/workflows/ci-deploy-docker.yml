@@ -8,6 +8,8 @@ jobs:
   build_and_push:
     name: Build and push image to GHCR
     runs-on: ubuntu-latest
+    outputs:
+      owner_lc: ${{ steps.owner.outputs.lc }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,11 +20,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # NEW: compute lowercase owner once
       - name: Compute lowercase owner
         id: owner
-        run: |
-          echo "lc=${OWNER,,}" >> "$GITHUB_OUTPUT"
+        run: echo "lc=${OWNER,,}" >> "$GITHUB_OUTPUT"
         env:
           OWNER: ${{ github.repository_owner }}
 
@@ -39,7 +39,7 @@ jobs:
           context: .
           file: server/Dockerfile
           push: true
-          tags: ghcr.io/${{ steps.owner.outputs.lc }}/fgsm-server:latest
+          tags: ghcr.io/${{ needs.build_and_push.outputs.owner_lc }}/fgsm-server:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -88,12 +88,11 @@ jobs:
           source: "deploy_remote.sh"
           target: "/home/${{ secrets.EC2_USER }}/deploy/"
 
-      # NEW: reuse the same lowercase owner for GHCR_USER
       - name: Execute deploy script on EC2
         uses: appleboy/ssh-action@v0.1.8
         env:
           GHCR_PAT_SECRET: ${{ secrets.GHCR_PAT }}
-          GHCR_USER: ${{ needs.build_and_push.outputs.owner_lc || steps_owner_lc }}
+          GHCR_USER: ${{ needs.build_and_push.outputs.owner_lc }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}

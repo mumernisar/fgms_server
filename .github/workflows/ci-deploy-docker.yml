@@ -36,70 +36,35 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: server            # was "."; smaller, faster context
           file: server/Dockerfile
           push: true
-          tags: ghcr.io/${{ needs.build_and_push.outputs.owner_lc }}/fgsm-server:latest
+          tags: |
+            ghcr.io/${{ steps.owner.outputs.lc }}/fgsm-server:latest
+            ghcr.io/${{ steps.owner.outputs.lc }}/fgsm-server:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   deploy_to_ec2:
-    name: Trigger remote deploy (pull & restart) on EC2
+    name: Pull latest image & restart via docker compose on EC2
     runs-on: ubuntu-latest
     needs: build_and_push
     steps:
-      - name: Prepare deploy script on runner
-        run: |
-          cat > deploy_remote.sh <<'SCRIPT'
-          #!/usr/bin/env bash
-          set -euo pipefail
-          docker --version || { echo "docker not installed on host"; exit 1; }
-
-          echo "Logging in to ghcr..."
-          echo "${GHCR_PAT_SECRET}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
-
-          echo "Pulling image ghcr.io/${GHCR_USER}/fgsm-server:latest"
-          docker pull ghcr.io/${GHCR_USER}/fgsm-server:latest
-
-          echo "Restarting container..."
-          docker rm -f fgsm-server || true
-          docker run -d --name fgsm-server \
-            --restart unless-stopped \
-            -p 8000:8000 \
-            ghcr.io/${GHCR_USER}/fgsm-server:latest
-          SCRIPT
-          chmod +x deploy_remote.sh
-
-      - name: Create deploy dir on EC2
-        uses: appleboy/ssh-action@v0.1.8
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            mkdir -p /home/${{ secrets.EC2_USER }}/deploy
-
-      - name: Copy deploy script to EC2 via SCP
-        uses: appleboy/scp-action@v0.1.14
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "deploy_remote.sh"
-          target: "/home/${{ secrets.EC2_USER }}/deploy/"
-
-      - name: Execute deploy script on EC2
+      - name: Deploy over SSH
         uses: appleboy/ssh-action@v0.1.8
         env:
-          GHCR_PAT_SECRET: ${{ secrets.GHCR_PAT }}
           GHCR_USER: ${{ needs.build_and_push.outputs.owner_lc }}
+          GHCR_PAT_SECRET: ${{ secrets.GHCR_PAT }}
+          COMPOSE_DIR: ${{ secrets.EC2_COMPOSE_DIR }}   # path where docker-compose.yml lives
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: GHCR_PAT_SECRET,GHCR_USER
+          envs: GHCR_USER,GHCR_PAT_SECRET,COMPOSE_DIR
           script: |
             set -euo pipefail
-            cd /home/${{ secrets.EC2_USER }}/deploy
-            chmod +x deploy_remote.sh
-            ./deploy_remote.sh
+            cd "${COMPOSE_DIR:-/home/${{ secrets.EC2_USER }}}"
+            echo "${GHCR_PAT_SECRET}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
+            docker compose pull
+            docker compose up -d --force-recreate
+            docker image prune -f

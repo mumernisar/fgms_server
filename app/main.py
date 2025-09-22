@@ -3,6 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.routes import attack, meta
 
+import logging, logging.config
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="DevNeuron - Fast Gradient Sign Method (FGSM) Adversarial Attacks")
 

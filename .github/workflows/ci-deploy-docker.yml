@@ -55,7 +55,7 @@ jobs:
         env:
           GHCR_USER: ${{ needs.build_and_push.outputs.owner_lc }}
           GHCR_PAT_SECRET: ${{ secrets.GHCR_PAT }}
-          COMPOSE_DIR: ${{ secrets.EC2_COMPOSE_DIR }}   # path where docker-compose.yml lives
+          COMPOSE_DIR: "~/fgsm"   # path where docker-compose.yml lives
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}

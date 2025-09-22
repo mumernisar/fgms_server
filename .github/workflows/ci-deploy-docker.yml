@@ -2,7 +2,7 @@ name: Build & Deploy Docker to EC2
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch: {}
 
 jobs:
@@ -37,7 +37,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: .       # was "."; smaller, faster context
+          context: . # was "."; smaller, faster context
           file: Dockerfile
           push: true
           tags: |
@@ -56,7 +56,7 @@ jobs:
         env:
           GHCR_USER: ${{ needs.build_and_push.outputs.owner_lc }}
           GHCR_PAT_SECRET: ${{ secrets.GHCR_PAT }}
-          COMPOSE_DIR: "~/fgsm"   # path where docker-compose.yml lives
+          COMPOSE_DIR: /home/ubuntu/fgsm # path where docker-compose.yml lives
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}

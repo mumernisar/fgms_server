@@ -1,4 +1,3 @@
-# server/Dockerfile
 # Python 3.10 slim base for small size
 FROM python:3.10-slim
 

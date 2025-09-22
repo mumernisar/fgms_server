@@ -5,7 +5,7 @@ from io import BytesIO
 import torch
 from torchvision.transforms.functional import to_pil_image
 
-# Optional fast JSON: use orjson if available; otherwise stdlib json (bytes)
+"""Attack route: creates an adversarial image using FGSM and streams JSON with base64 image."""
 try:
     import orjson as _json
     def _dumps_bytes(obj) -> bytes:
@@ -13,7 +13,6 @@ try:
 except Exception:
     import json as _json
     def _dumps_bytes(obj) -> bytes:
-        # ensure we return compact bytes with no spaces
         return _json.dumps(obj, separators=(",", ":")).encode("utf-8")
 
 from app.services.imagenet import ImageNetService
@@ -24,18 +23,12 @@ from app.utils.labels import imagenet_labels, format_topk
 log = logging.getLogger("attack")
 router = APIRouter()
 
-# Services (CPU for now; flip to "cuda" when ready)
 _svc = ImageNetService(device="cpu")
 _attacker = FGSM(_svc.model, _svc.preprocess01_to_norm)
 _LABELS = imagenet_labels()
 
-# ---------- helpers ----------
-
 def tensor01_to_jpeg_bytes(x01: torch.Tensor, quality: int = 85):
-    """
-    x01: torch.Tensor in [0,1], shape (1,3,H,W) or (3,H,W)
-    returns: (jpeg_bytes, width, height)
-    """
+    """Convert [0,1] tensor to JPEG bytes and return (bytes, width, height)."""
     x = x01.squeeze(0) if x01.dim() == 4 else x01
     img = to_pil_image(x.clamp(0, 1).cpu())  # RGB PIL Image
     buf = BytesIO()
@@ -44,14 +37,9 @@ def tensor01_to_jpeg_bytes(x01: torch.Tensor, quality: int = 85):
     return data, img.width, img.height
 
 def stream_b64_json(meta: dict, jpeg_bytes: bytes, chunk_size: int = 3 * 8192):
-    """
-    Stream a compact JSON object that includes all of `meta` plus:
-      "img":"<base64 of jpeg_bytes>"
-    Base64 chunks are 3-byte aligned so concatenation remains valid.
-    """
+    """Stream compact JSON: {meta..., "img": "<base64>"} with 3-byte aligned chunks."""
     head = _dumps_bytes(meta)  # e.g. b'{"epsilon":0.1,"..."}'
     if not head.endswith(b"}"):
-        # Extremely defensive; shouldn't happen given _dumps_bytes
         raise RuntimeError("meta serialization did not end with '}'")
     # Emit everything except the closing brace, then start the "img" field
     yield head[:-1] + b',"img":"'
@@ -89,6 +77,16 @@ async def attack_endpoint(
 
     # read upload
     img_bytes = await file.read()
+    if not img_bytes:
+        raise HTTPException(400, "Empty file")
+    max_mb = 5.0
+    try:
+        from os import getenv
+        max_mb = float(getenv("MAX_UPLOAD_MB", str(max_mb)))
+    except Exception:
+        pass
+    if len(img_bytes) > int(max_mb * 1024 * 1024):
+        raise HTTPException(413, f"File too large (>{max_mb} MB)")
     t1 = t(); log.info("attack: read_upload_ms=%.1f", (t1 - t0) * 1e3)
 
     # decode + preprocess to [0,1]

@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.routes import attack, meta
 
-import logging, logging.config
+import logging
 
 logging.basicConfig(
     level=logging.INFO,

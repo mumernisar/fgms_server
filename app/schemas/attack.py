@@ -10,4 +10,4 @@ class AttackResponse(BaseModel):
     adversarial_topk: List[Prediction]
     epsilon: float = Field(..., ge=0.0, le=1.0)
     attack_success: bool
-    adversarial_image_base64_png: str
+    # adversarial_image_base64_png: str

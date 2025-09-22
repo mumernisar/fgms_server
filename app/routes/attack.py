@@ -75,5 +75,5 @@ async def attack_endpoint(
         adversarial_topk=adversarial_topk,
         epsilon=eps_val,
         attack_success=success,
-        adversarial_image_base64_png=adv_png_b64,
+        # adversarial_image_base64_png=adv_png_b64,
     )

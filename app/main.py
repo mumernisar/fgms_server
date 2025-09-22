@@ -16,10 +16,11 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=["https://fgsm-demo.mumernisar.dev/", "http://localhost:3000"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        max_age=86400,
     )
 
     async def _unhandled_exception_handler(_: Request, __: Exception):
